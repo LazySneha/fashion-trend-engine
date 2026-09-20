@@ -1,0 +1,38 @@
+# Brand tiers for the Trickle-Down Trend Tracker (Fall/Winter 2026).
+# Tier = price positioning. Luxury sets trends on the runway (Feb-Mar 2026 shows);
+# semi_luxury adapts them; affordable mass-produces them.
+
+luxury:
+  - Chanel
+  - Prada
+  - Hermès
+  - Ralph Lauren        # Ralph Lauren Collection (runway line)
+  - Saint Laurent
+  - Miu Miu
+  - Bottega Veneta
+  - Celine
+  - Loewe
+  - Gucci
+  - Dior
+  - The Row
+  - Khaite
+
+semi_luxury:            # contemporary / "everyday luxury"
+  - Aritzia
+  - Cult Gaia
+  - name: Reformation   # common word; disambiguate
+    search_term: "Reformation clothing"
+  - Sandro
+  - name: Theory        # common word; disambiguate
+    search_term: "Theory clothing"
+  - name: COS           # common word/acronym; disambiguate
+    search_term: "COS fashion"
+  - Toteme
+
+affordable:
+  - Zara
+  - H&M
+  - name: Mango         # common word (the fruit); disambiguate
+    search_term: "Mango fashion"
+  - Uniqlo
+  - Abercrombie & Fitch

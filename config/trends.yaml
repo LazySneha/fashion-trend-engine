@@ -1,0 +1,106 @@
+# Fall/Winter 2026 trend terms, grounded in runway coverage (shows Feb-Mar 2026).
+# query_terms: what we search for (OR'd). context: extra words to cut noise for common words.
+# evidence: luxury brands that showed it, and the source that reported it.
+
+trends:
+  - id: suede
+    label: Suede
+    query_terms: ["suede"]
+    evidence:
+      brands: [Chanel]
+      note: Quilted suede in matelassé patterns
+      source: https://www.wmagazine.com/fashion/chanel-fall-2026-matthieu-blazy-runway-photos
+
+  - id: statement_fur
+    label: Statement (faux) fur
+    query_terms: ["faux fur", "fur coat"]
+    evidence:
+      brands: [Valentino, Chanel, Gucci, Schiaparelli]
+      source: https://coveteur.com/fall-winter-2026-runway-trends
+
+  - id: shearling_texture
+    label: Shearling and tactile texture
+    query_terms: ["shearling", "fringe"]
+    evidence:
+      brands: [Chanel, Bottega Veneta, Louis Vuitton, Loewe, Balenciaga]
+      source: https://coveteur.com/fall-winter-2026-runway-trends
+
+  - id: purple
+    label: Purple
+    query_terms: ["purple", "violet", "plum"]
+    context: ["dress", "coat", "sweater", "fashion"]
+    evidence:
+      brands: [Celine, Mugler, Chloé, Ferragamo, Loewe, Balenciaga, Tory Burch]
+      source: https://www.whowhatwear.com/fashion/runway/fashion-week-trends-fall-winter-2026
+
+  - id: oxblood
+    label: Oxblood / burgundy
+    query_terms: ["oxblood", "burgundy"]
+    context: ["dress", "coat", "bag", "fashion"]
+    evidence:
+      brands: [Hermès]
+      source: https://www.whowhatwear.com/fashion/runway/hermes-paris-fashion-week-fall-winter-2026
+
+  - id: olive_moss
+    label: Olive / moss green
+    query_terms: ["olive green", "moss green"]
+    evidence:
+      brands: [Hermès, Loewe, Victoria Beckham]
+      source: https://www.net-a-porter.com/en-ch/porter/article-c99dca08ba956cfc/fashion/art-of-style/fw26-fashion-trends
+
+  - id: skirt_suit
+    label: The skirt suit
+    query_terms: ["skirt suit"]
+    evidence:
+      brands: [Chanel, Hermès, Tom Ford, The Row, Gucci, Celine, Jil Sander]
+      source: https://www.whowhatwear.com/fashion/runway/fashion-week-trends-fall-winter-2026
+
+  - id: le_smoking
+    label: Tuxedo dressing ("le smoking")
+    query_terms: ["tuxedo", "le smoking"]
+    evidence:
+      brands: [Saint Laurent, The Row, Khaite, Alexander McQueen, Michael Kors]
+      source: https://www.whowhatwear.com/fashion/runway/fashion-week-trends-fall-winter-2026
+
+  - id: equestrian
+    label: Equestrian (riding boots, jodhpurs)
+    query_terms: ["riding boots", "jodhpurs", "equestrian"]
+    evidence:
+      brands: [Hermès, Ralph Lauren]
+      source: https://www.whowhatwear.com/fashion/runway/ralph-lauren-new-york-fashion-week-fall-winter-2026
+
+  - id: leopard
+    label: Leopard and animal print
+    query_terms: ["leopard print", "animal print"]
+    evidence:
+      brands: [Ralph Lauren, Calvin Klein, Balenciaga]
+      source: https://www.whowhatwear.com/fashion/runway/ralph-lauren-new-york-fashion-week-fall-winter-2026
+
+  - id: plaid
+    label: Plaid and tartan
+    query_terms: ["tartan", "plaid"]
+    evidence:
+      brands: [Chloé, Acne Studios, Burberry, Rabanne]
+      source: https://coveteur.com/fall-winter-2026-runway-trends
+
+  - id: brooch
+    label: Statement brooches
+    query_terms: ["brooch"]
+    evidence:
+      brands: [Chanel, Dior, Khaite, Simone Rocha]
+      source: https://coveteur.com/fall-winter-2026-runway-trends
+
+  - id: velvet
+    label: Velvet (and leather)
+    query_terms: ["velvet"]
+    evidence:
+      brands: [Ralph Lauren, Khaite, Alaïa, Toteme]
+      source: https://www.net-a-porter.com/en-ch/porter/article-c99dca08ba956cfc/fashion/art-of-style/fw26-fashion-trends
+
+  - id: sheer_layering
+    label: Sheer layering ("window dressing")
+    query_terms: ["sheer layering", "sheer"]
+    context: ["dress", "skirt", "top", "fashion"]
+    evidence:
+      brands: [Prada, Tom Ford, The Row, Victoria Beckham]
+      source: https://www.whowhatwear.com/fashion/runway/fashion-week-trends-fall-winter-2026
