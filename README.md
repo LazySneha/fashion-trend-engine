@@ -210,6 +210,27 @@ Two honest reads of this, not one clean story:
 Take the specific week-counts as directional, not precise — see Limitations above, especially the
 GDELT-news-volume-as-proxy and FW26-inflates-luxury-coverage caveats.
 
+### The semi-luxury → affordable lag, in charts
+
+The three trends with the widest, cleanest semi-luxury → affordable gaps (`charts/` has all 14;
+these three are copied into `docs/` so they render here without needing `data/` regenerated):
+
+![Purple mention share by tier](docs/purple.png)
+`purple`: semi-luxury's Nov 2025 spike (7% share) is the dominant feature at this scale, which
+flattens affordable's own real-but-much-smaller breakout in Aug 2026 into something that looks
+flat by eye — the algorithm catches it (relative to affordable's own quiet baseline) even though
+the chart doesn't make it obvious; the widest gap observed, ~36 weeks.
+
+![Oxblood mention share by tier](docs/oxblood.png)
+`oxblood`: a sharp semi-luxury spike in late 2025 (twice, up to 14% share) with affordable's own
+visible breakout (a clear ~3% spike) not arriving until spring 2026, ~20 weeks later — the
+cleanest visual case of the three.
+
+![Olive/moss green mention share by tier](docs/olive_moss.png)
+`olive_moss`: semi-luxury spikes repeatedly through the FW26 window and peaks in June 2026, then
+affordable has its own clear spike in August 2026, roughly 28 weeks after semi-luxury's first
+sustained signal.
+
 See `data/output/trend_diffusion.csv` for all 14 trends (including the 7 partial ones, which
 mostly land as `spreading`/`emerging`/`no_signal` simply for lack of data) and `charts/*.png` for
 the full weekly curves.
