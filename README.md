@@ -158,19 +158,68 @@ make analyze     # weekly marts -> data/output/trend_diffusion.csv
 make charts      # weekly marts -> charts/*.png (3 tier lines per trend)
 make all         # the above four, in order
 make test        # pytest -- all synthetic fixtures, no network calls
+
+make agent Q="'which trends reached the affordable tier fastest?'"   # ask the marts
+make eval        # agent eval suite (needs ANTHROPIC_API_KEY)
+make eval-dry    # print eval cases + ground truth, no API calls
 ```
 
 Each module is also runnable standalone, e.g. `python -m src.ingest_gdelt` (optionally
 `python -m src.ingest_gdelt 5` to run only the first 5 tasks — useful for a smoke test before
 committing to the full 45-query, rate-limited sweep).
 
+## Query agent
+
+A natural-language layer over the finished marts: ask a question, get an answer
+grounded in a SQL query it actually ran.
+
+```bash
+make agent Q="'what is the lag for suede?'"
+```
+
+**DuckDB reads the parquet marts directly** — `weekly_mentions`, `weekly_baseline`, and
+`trend_diffusion` are registered as views over the files the pipeline already produced. The agent
+has no network path to GDELT at all: `src/agent_db.py` is its only data access, and it reads local
+files and nothing else, so a question can never trigger a fetch or cost an API quota.
+
+**The SQL guardrail parses, it doesn't pattern-match.** Candidate SQL goes through DuckDB's own
+parser (`json_serialize_sql`) and must come back as exactly one `SELECT`. Stacked statements
+(`SELECT 1; DROP TABLE ...`), DDL, and DML fail to parse at all. A second layer rejects
+filesystem-reaching table functions (`read_csv`, `read_parquet`, `glob`), which would otherwise be
+valid SELECTs. Every query is logged to `data/output/agent_queries.jsonl` with its question, row
+count, duration, and any error.
+
+Two behaviours are the actual point, and both are asserted in the eval suite rather than just
+described in the prompt:
+
+- **It refuses past its data.** Coverage is computed from the marts at startup and injected into
+  the system prompt, because an empty result set is indistinguishable from a real zero unless you
+  already know that tier was never ingested. Asked about a trend missing a tier, it names the
+  missing tier and declines to give a lag — `trend_diffusion` still has a row for such trends, and
+  those values are artefacts of missing data, not findings.
+- **It describes the metric honestly.** This measures press coverage volume, so the agent says
+  "press momentum" or "media attention" and never "best selling", "sell-through", or a bare
+  "trending". Asked a sell-through question outright, it says the dataset cannot answer it instead
+  of substituting press volume.
+
+`make eval` runs the suite: fixed questions, with the expected values computed from the marts by
+ground-truth SQL at run time rather than pasted in as literals, since incremental ingest would rot
+hard-coded numbers into false failures. `make eval-dry` prints the cases and their ground truth
+without spending any tokens.
+
 ## Findings
 
-**Results cover 7 of 14 trends; ingest is incremental and cached, remaining trends fill in on
-later runs.** (`suede`, `statement_fur`, `shearling_texture`, `purple`, `oxblood`, `olive_moss`,
-`skirt_suit` have all 3 tiers ingested; the other 7 are missing at least one tier — GDELT
-throttled part of the run harder than its documented rate limit. Rerunning `make ingest` resumes
-from cache and only fetches what's still missing.)
+**Coverage is now 13 of 14 trends (44 of 45 queries cached).** Only `le_smoking` is still
+incomplete, missing its `affordable` tier — GDELT returned HTTP 429 on that one query after four
+attempts. Rerunning `make ingest` resumes from cache and retries only what's missing.
+
+> **The table and analysis below were written against an earlier 7-trend subset and have not been
+> regenerated.** The six trends that filled in since (`equestrian`, `leopard`, `plaid`, `brooch`,
+> `velvet`, `sheer_layering`) all classify as `mass`, and they do **not** reproduce the
+> semi→affordable pattern described below: across all 11 trends that now have a semi→affordable
+> lag, 5 are negative and 6 positive, ranging −10 to +36. The luxury→semi finding, by contrast,
+> holds and strengthens — 6 of 9 lags are negative. See `data/output/trend_diffusion.csv` for the
+> current numbers; the prose below is kept as written rather than quietly restated.
 
 Of the 7 complete trends, all but `suede` and `shearling_texture` classify as `mass` — trend
 mentions reached a sustained, elevated share of press for all three tiers within the 12-month
