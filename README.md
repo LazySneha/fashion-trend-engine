@@ -237,10 +237,14 @@ window:
 
 Two honest reads of this, not one clean story:
 
-- **The semi→affordable lag is consistently large and positive** (8–36 weeks) across every trend
-  that reached `mass`. That's the strongest signal in the data, and it's in the direction the
-  hypothesis predicts — semi-luxury press attention shows up well before affordable press
-  attention does.
+- **The semi→affordable lag is large and positive for four of the five `mass` trends here**
+  (+8 to +36 weeks), with `skirt_suit` running −10 the other way. On this subset it was the
+  strongest signal in the data and pointed where the hypothesis predicts — semi-luxury press
+  attention showing up before affordable press attention. Two caveats, both load-bearing: it was
+  never consistent even here (that −10 has been in this table since the first version, and an
+  earlier draft of this sentence wrongly called the pattern consistent across every `mass`
+  trend), and on the full 13-trend dataset it does not hold at all — 5 negative, 6 positive,
+  −10 to +36. See the note above the table.
 - **The luxury→semi lag is inconsistent, and mostly *not* in the predicted direction** — negative
   (semi-luxury signal arrived *before* luxury's) for 3 of 5 `mass` trends, and undetected
   entirely for 2 more. Read at face value this would say semi-luxury sometimes leads, not
