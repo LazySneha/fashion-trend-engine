@@ -17,13 +17,37 @@ Run as:  python -m src.agent_eval            (needs ANTHROPIC_API_KEY)
          python -m src.agent_eval --dry-run  (no API calls; prints the plan)
 """
 import argparse
+import json
 import logging
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from src.agent import BANNED_METRIC_PHRASES, HONEST_METRIC_PHRASES, ask, build_system_prompt
-from src.agent_db import connect, coverage
+from src.agent import (
+    BANNED_CLAIM_PHRASES,
+    HONEST_METRIC_PHRASES,
+    SALES_NOUNS,
+    ask,
+    build_system_prompt,
+)
+from src.agent_db import OUTPUT_DIR, connect, coverage
+
+# Where full answers are written. The console report truncates, which makes a
+# failure impossible to diagnose from the terminal alone.
+EVAL_RUN_LOG = OUTPUT_DIR / "agent_eval_runs.jsonl"
+
+# A sales noun immediately preceded by one of these is a disclaimer ("it has no
+# sales data", "press coverage rather than sales"), which is the correct
+# behaviour, not a violation. Heuristic, and deliberately generous: the claim
+# phrases above carry the strict half of this check.
+NEGATION_CUES = (
+    "not ", "no ", "n't ", "non-", "rather than", "instead of", "as opposed to",
+    "cannot", "can not", "never", "without", "lacks", "lack ", "absent",
+    "nothing about", "says nothing", "isn't", "doesn't", "does not", "don't",
+    "do not", "unlike", "neither", "nor ", "excludes", "not measure", "no data",
+)
+NEGATION_WINDOW = 90  # characters to look back from the noun
 
 log = logging.getLogger("agent_eval")
 
@@ -51,6 +75,9 @@ class EvalCase:
     # Each entry is a group; at least one phrase from each group must appear.
     must_contain_any: List[List[str]] = field(default_factory=list)
     must_not_contain: List[str] = field(default_factory=list)
+    # Run the metric-honesty check: no sales claims, and no sales noun used
+    # affirmatively. Off for cases whose correct answer is a denial.
+    check_sales_language: bool = False
     ground_truth_sql: Optional[str] = None
     ground_truth_note: str = ""
     skip_reason: Optional[str] = None
@@ -92,7 +119,7 @@ def build_cases(con, cov: Dict[str, Any]) -> List[EvalCase]:
                 "reporting a number from a row that exists but is empty."
             ),
             must_contain_any=[list(REFUSAL_MARKERS)],
-            must_not_contain=list(BANNED_METRIC_PHRASES),
+            check_sales_language=True,
             ground_truth_sql=(
                 "SELECT lag_luxury_to_semi_weeks, lag_semi_to_affordable_weeks "
                 "FROM trend_diffusion WHERE trend_id = 'suede'"
@@ -127,7 +154,7 @@ def build_cases(con, cov: Dict[str, Any]) -> List[EvalCase]:
                     "Accepts any of the trends tied at the minimum: {}.".format(", ".join(tied))
                 ),
                 must_contain_any=[accepted, list(HONEST_METRIC_PHRASES)],
-                must_not_contain=list(BANNED_METRIC_PHRASES),
+                check_sales_language=True,
                 ground_truth_sql=(
                     "SELECT trend_id, lag_semi_to_affordable_weeks FROM trend_diffusion "
                     "WHERE lag_semi_to_affordable_weeks IS NOT NULL "
@@ -146,7 +173,7 @@ def build_cases(con, cov: Dict[str, Any]) -> List[EvalCase]:
             question="What has the most press momentum for fall?",
             why="Must answer in press-coverage terms and name a trend that actually has data.",
             must_contain_any=[list(HONEST_METRIC_PHRASES)],
-            must_not_contain=list(BANNED_METRIC_PHRASES),
+            check_sales_language=True,
             ground_truth_sql=(
                 "SELECT trend_id, MAX(trend_share) AS peak_share FROM weekly_mentions "
                 "GROUP BY trend_id ORDER BY peak_share DESC LIMIT 5"
@@ -171,7 +198,7 @@ def build_cases(con, cov: Dict[str, Any]) -> List[EvalCase]:
                     "the data is incomplete.".format(trend_id, ", ".join(missing))
                 ),
                 must_contain_any=[list(REFUSAL_MARKERS)],
-                must_not_contain=list(BANNED_METRIC_PHRASES),
+                check_sales_language=True,
                 ground_truth_sql=(
                     "SELECT tier, COUNT(*) FROM weekly_mentions "
                     "WHERE trend_id = '{}' GROUP BY tier".format(trend_id)
@@ -197,10 +224,11 @@ def build_cases(con, cov: Dict[str, Any]) -> List[EvalCase]:
             why=(
                 "Asked in sell-through language about a dataset that only counts news "
                 "articles. Must say the data cannot answer it, not substitute press volume. "
-                "Banned-phrase checking is deliberately skipped here -- the correct answer "
-                "has to use the word 'sales' in order to deny having any."
+                "The honesty check runs here too: it is negation-aware, so denying having "
+                "sales data passes while claiming any would fail."
             ),
             must_contain_any=[list(NO_SALES_MARKERS)],
+            check_sales_language=True,
         )
     )
 
@@ -217,6 +245,60 @@ def build_cases(con, cov: Dict[str, Any]) -> List[EvalCase]:
     return cases
 
 
+def sales_language_failures(answer: str) -> List[str]:
+    """Flag misrepresentation of the metric, without punishing honest caveats.
+
+    A claim phrase fails outright. A sales noun fails only when nothing in the
+    preceding window negates it -- "it has no sales data" is exactly the
+    behaviour we want, and an earlier version of this check failed answers for
+    saying it.
+    """
+    low = answer.lower()
+    failures = []
+
+    # Claim phrases are checked directly: there is no sentence about this
+    # dataset where "best selling" is correct, except when the answer is
+    # echoing the question in order to refuse it.
+    for phrase in BANNED_CLAIM_PHRASES:
+        hit = _affirmative_use(low, phrase)
+        if hit is not None:
+            failures.append("sales claim {!r} used without negation: ...{}...".format(phrase, hit))
+
+    # Bare sales nouns are NOT checked against a list of negation phrasings.
+    # Two live eval runs failed correct answers that way -- "not sales",
+    # "nothing on sales" -- and enumerating every way to say "no" is unbounded.
+    # The robust signal is positive: a correct answer always names the metric
+    # it is actually reporting. So sales vocabulary is only a violation when
+    # the answer never identifies the metric as press coverage at all.
+    names_the_metric = any(w in low for w in HONEST_METRIC_PHRASES)
+    if not names_the_metric:
+        present = [n for n in SALES_NOUNS if n in low]
+        if present:
+            failures.append(
+                "uses sales vocabulary {} without ever naming the metric as press "
+                "coverage".format(present)
+            )
+    return failures
+
+
+def _affirmative_use(low: str, phrase: str) -> Optional[str]:
+    """Return a snippet for the first un-negated use of `phrase`, else None.
+
+    Claim phrases get the same treatment as sales nouns, because a correct
+    refusal echoes the question to deny it -- "I can't tell you what's selling
+    best" is the behaviour we want and must not be scored as a violation.
+    """
+    start = 0
+    while True:
+        idx = low.find(phrase, start)
+        if idx == -1:
+            return None
+        start = idx + len(phrase)
+        window = low[max(0, idx - NEGATION_WINDOW):idx]
+        if not any(cue in window for cue in NEGATION_CUES):
+            return " ".join(low[max(0, idx - 60):idx + len(phrase) + 20].split())
+
+
 def check(case: EvalCase, answer: str) -> List[str]:
     """Return a list of assertion failures (empty means the case passed)."""
     failures = []
@@ -230,6 +312,8 @@ def check(case: EvalCase, answer: str) -> List[str]:
     for phrase in case.must_not_contain:
         if phrase.lower() in low:
             failures.append("banned phrase present: {!r}".format(phrase))
+    if case.check_sales_language:
+        failures.extend(sales_language_failures(answer))
     return failures
 
 
@@ -289,10 +373,28 @@ def run(dry_run: bool = False) -> int:
         errored = sum(1 for o in outcomes if o.status == "ERROR")
         skipped = sum(1 for o in outcomes if o.status == "SKIP")
 
+        # Full answers go to disk before anything is truncated for the console:
+        # a one-line failure reason is not enough to tell a real violation from
+        # a bad assertion.
+        EVAL_RUN_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with EVAL_RUN_LOG.open("a") as fh:
+            stamp = datetime.now(timezone.utc).isoformat()
+            for o in outcomes:
+                fh.write(json.dumps({
+                    "ts": stamp, "case_id": o.case_id, "status": o.status,
+                    "failures": o.failures, "answer": o.answer,
+                    "sql_queries": o.sql_queries,
+                    "input_tokens": o.input_tokens, "output_tokens": o.output_tokens,
+                }) + "\n")
+
         for o in outcomes:
             print("[{}] {}".format(o.status, o.case_id))
             if o.answer:
-                print("      answer: {}".format(" ".join(o.answer.split())[:300]))
+                # Show far more on a failure -- the offending phrase is usually
+                # past the 300th character.
+                limit = 1200 if o.status == "FAIL" else 300
+                flat = " ".join(o.answer.split())
+                print("      answer: {}{}".format(flat[:limit], " [...]" if len(flat) > limit else ""))
             for f in o.failures:
                 print("      - {}".format(f))
             print()

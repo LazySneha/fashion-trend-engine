@@ -49,10 +49,19 @@ MAX_ITERATIONS = 6
 
 # Vocabulary that would misrepresent what this pipeline measures. Asserted
 # against in the eval harness, not just described in prose.
-BANNED_METRIC_PHRASES = (
+#
+# Split deliberately. A claim phrase is wrong however it is used -- there is no
+# sentence about this dataset in which "best selling" is correct. A sales noun
+# is different: the *right* answer often has to use the word in order to deny
+# having any ("it has no sales data"), so those are only a failure when used
+# affirmatively. src.agent_eval checks them against surrounding negation.
+BANNED_CLAIM_PHRASES = (
     "best selling", "best-selling", "bestselling", "top selling", "top-selling",
-    "sell-through", "sellthrough", "sales", "sold", "revenue", "units",
-    "purchased", "shoppers bought",
+    "selling best", "most popular", "shoppers bought", "consumers bought",
+    "units sold",
+)
+SALES_NOUNS = (
+    "sales", "sell-through", "sellthrough", "revenue", "sold", "purchased",
 )
 HONEST_METRIC_PHRASES = (
     "press", "media", "coverage", "mention", "attention", "momentum", "article",
@@ -100,6 +109,10 @@ SCHEMA:
 
 HOW TO WORK:
 - Call run_sql to get the facts you need, then answer in plain prose.
+- Alias every computed column with an explicit AS and a double-quoted name, \
+e.g. COUNT(*) AS "weeks". Several natural alias names (weeks, day, month, \
+year) are reserved interval keywords in DuckDB and fail to parse as bare \
+aliases, costing you a wasted turn.
 - Prefer trend_diffusion for lag/diffusion questions and weekly_mentions for \
 time-series or "most momentum" questions.
 - Rank by trend_share, never by mention_count, when comparing across tiers.

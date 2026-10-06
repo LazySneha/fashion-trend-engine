@@ -131,10 +131,16 @@ def validate_select(sql: str) -> None:
         probe.close()
 
     if parsed.get("error"):
-        # DuckDB's serializer only accepts SELECT; DDL/DML and stacked
-        # statements land here.
+        # Two different things land here and the message must not conflate
+        # them: SQL that is syntactically invalid, and SQL that is valid but
+        # isn't a SELECT (DDL/DML, stacked statements). Both are rejected, but
+        # telling a malformed query it "isn't a SELECT" sends the model (and
+        # anyone reading the log) chasing the wrong problem.
         detail = parsed.get("error_message") or parsed.get("error_type") or "not a SELECT statement"
-        raise SqlGuardError(f"Only a single SELECT is allowed. Parser said: {detail}")
+        raise SqlGuardError(
+            f"SQL rejected: must be a single, valid SELECT over the views "
+            f"({', '.join(VIEW_SOURCES)}). Parser said: {detail}"
+        )
 
     statements = parsed.get("statements") or []
     if len(statements) != 1:
@@ -173,7 +179,24 @@ def run_query(
     """Validate, execute, log. Returns a dict with columns/rows/truncated, or
     raises SqlGuardError. Execution errors are returned (not raised) so the
     agent can see its own mistake and correct the SQL on the next turn."""
-    validate_select(sql)
+    # Log rejections too, then re-raise. The rejected query is precisely the
+    # one worth reading afterwards, and an earlier version dropped it on the
+    # floor because validation ran before any logging.
+    try:
+        validate_select(sql)
+    except SqlGuardError as exc:
+        _log_query(
+            {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "question": question,
+                "sql": " ".join(sql.split()),
+                "row_count": 0,
+                "truncated": False,
+                "elapsed_ms": 0,
+                "error": "REJECTED: {}".format(exc),
+            }
+        )
+        raise
 
     started = time.time()
     error = None

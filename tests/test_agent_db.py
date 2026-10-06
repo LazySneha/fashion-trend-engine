@@ -165,3 +165,74 @@ def test_coverage_prompt_block_names_missing_tiers(con):
     assert "velvet" in block
     assert "affordable" in block and "luxury" in block
     assert "PARTIAL" in block
+
+
+# --- metric-honesty check (regression: it used to fail honest caveats) ---
+
+
+# These four are verbatim excerpts from real eval runs. Two of them were
+# scored as violations by earlier versions of this check -- once for saying
+# "not sales", once for saying "nothing on sales". Denying having sales data is
+# the behaviour the agent is supposed to have, so the fixtures are kept
+# verbatim rather than trimmed to suit the rule.
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "I can't answer that. This dataset has no sales data. It only counts news articles "
+        "from GDELT, so it measures how much press coverage a trend gets. It has nothing on "
+        "sales, sell-through, inventory or what shoppers buy at Zara or anywhere else.",
+        "Sheer layering has the most press momentum for fall. I measured this with trend_share, "
+        "the trend's share of each tier's brand-press articles. This is press coverage only, "
+        "not sales or what shoppers are buying.",
+        "I can't tell you what's selling best at Zara. This dataset counts news articles, so it "
+        "only measures how much press a trend gets. It has no sales or sell-through data.",
+        "It only counts news articles from GDELT, so it measures press coverage. It has no "
+        "inventory, stock levels, product catalogues, or retailer data.",
+    ],
+)
+def test_honest_sales_caveats_are_not_violations(answer):
+    from src.agent_eval import sales_language_failures
+
+    assert sales_language_failures(answer) == []
+
+
+def test_sales_vocabulary_without_naming_the_metric_is_a_violation():
+    # The rule that replaced negation-phrase matching: sales words are fine in
+    # a disclaimer, but an answer that never says what it IS measuring has no
+    # business using them.
+    from src.agent_eval import sales_language_failures
+
+    assert sales_language_failures("Suede had the highest sell-through in Q3.") != []
+    assert sales_language_failures(
+        "Suede led on sell-through. Measured as press coverage share."
+    ) == []
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Oxblood is the best selling trend this fall.",
+        "Velvet was top-selling in the affordable tier.",
+        "Purple drove the strongest sales growth this season.",
+        "Leopard is the most popular trend with shoppers.",
+        # A claim phrase is still caught even when the metric IS named, because
+        # naming the metric doesn't license misdescribing it.
+        "By press coverage share, oxblood is the best selling trend this fall.",
+    ],
+)
+def test_sales_claims_are_violations(answer):
+    from src.agent_eval import sales_language_failures
+
+    assert sales_language_failures(answer) != []
+
+
+def test_guardrail_rejections_are_logged_then_raised(con, tmp_path, monkeypatch):
+    # The rejected query is the one you most want to read later.
+    log_path = tmp_path / "q.jsonl"
+    monkeypatch.setattr("src.agent_db.AGENT_QUERY_LOG", log_path)
+    with pytest.raises(SqlGuardError):
+        run_query(con, "SELECT 1; DROP TABLE weekly_mentions", question="bad one")
+    entry = json.loads(log_path.read_text().splitlines()[0])
+    assert entry["question"] == "bad one"
+    assert "DROP TABLE" in entry["sql"]
+    assert entry["error"].startswith("REJECTED:")
